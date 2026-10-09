@@ -55,7 +55,7 @@ async function start(){
  document.querySelector('#main-form')?.addEventListener('submit',async event=>{
   event.preventDefault();const form=event.currentTarget;const body=Object.fromEntries(new FormData(form));const button=form.querySelector('[type=submit]');button.disabled=true;tell('Processando…');
   try{
-   if(page==='login'){await login(body.email,body.password);const me=await api('/me');location.assign(homeFor(me));}
+   if(page==='login'){await login(body.email,body.password);const me=await api('/me');location.assign(homeFor(me,body.area||'auto'));}
    if(page==='signup'){await signup(body.email,body.password,body.name);form.reset();tell('Cadastro recebido. Confira seu e-mail para confirmar a conta e depois faça login.');}
    if(page==='recover'){if(session()&&new URLSearchParams(location.search).get('mode')==='password'){await changePassword(body.password);tell('Senha atualizada.');}else{await recover(body.email);tell('Se o e-mail estiver cadastrado, você receberá um link para recuperar a senha.');}}
    if(page==='owner'){await api('/requests',body);form.reset();await owner();tell('Solicitação enviada para análise.');}
