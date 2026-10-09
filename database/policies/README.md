@@ -1,1 +1,1 @@
-Políticas versionadas na migration inicial. Tabelas futuras têm leitura limitada e nenhuma escrita concedida a clientes. Acesso clínico exige vínculo ativo; ser platform_admin não concede acesso clínico.
+Políticas e funções versionadas em `supabase/migrations/`. Leituras exigem vínculo ativo e clínica ativa; escritas clínicas passam por RPCs transacionais com autorização explícita. Superadministradores não recebem acesso clínico. Tabelas privadas de convites e tokens têm RLS e políticas de bloqueio direto. Testes de isolamento: `tests/rls.sql` e `tests/operations.sql`.

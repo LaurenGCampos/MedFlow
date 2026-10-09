@@ -33,7 +33,7 @@ if ! responds http://127.0.0.1:8080/api/health; then
   if command -v php >/dev/null; then
     (cd backend && exec php -S 127.0.0.1:8080 -t public public/index.php) >backend/var/api.log 2>&1 &
   elif command -v podman >/dev/null; then
-    podman run --rm -p 127.0.0.1:8080:8080 -v "$project_dir:/app:ro,Z" -w /app/backend docker.io/library/php:8.3-cli php -S 0.0.0.0:8080 -t public public/index.php >backend/var/api.log 2>&1 &
+    podman run --rm -p 127.0.0.1:8080:8080 -v "$project_dir:/app:ro,z" -w /app/backend docker.io/library/php:8.3-cli php -S 0.0.0.0:8080 -t public public/index.php >backend/var/api.log 2>&1 &
   else
     echo 'Instale PHP 8.3 com cURL ou Podman para iniciar a API.' >&2
     exit 1

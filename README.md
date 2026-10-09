@@ -1,109 +1,103 @@
-# MedFlow — primeira fase
+# MedFlow
 
-Frontend HTML/CSS/JavaScript, API PHP 8.3 e Supabase Auth/PostgreSQL. Nenhum prontuário, dados de demonstração ou credencial privilegiada. Painéis operacionais e acompanhamento de senhas ficam para fases posteriores.
+Sistema de clínicas com HTML/CSS/JavaScript, API PHP 8.3 e Supabase Auth/PostgreSQL. Inclui aprovação de clínicas, administração, recepção, atendimento médico e acompanhamento de senhas. Não inclui prontuários.
 
-## Arquitetura e autorização
+## Usar a instalação local
 
-O navegador autentica diretamente no Supabase Auth. A API valida o Bearer token via `/auth/v1/user` e consulta PostgREST com esse mesmo token e uma chave pública. Não usa `service_role`, conexão privilegiada ou SQL concatenado. Supabase é responsável pelo armazenamento de senhas. `clinic_id` selecionado nunca constitui autorização.
-
-Vínculos ficam em `clinic_members`, permitindo funções diferentes por clínica. RLS exige vínculo e clínica ativa. Superadministradores leem metadados de clínicas, solicitações e auditoria da plataforma, mas não recebem acesso a pacientes/atendimentos. Nenhuma escrita clínica é habilitada nesta fase. As FKs compostas mantêm referências na mesma clínica.
-
-Solicitações pendentes são registros de `clinic_requests`; a clínica é criada apenas na aprovação. `private.decide_clinic_request` bloqueia a solicitação com `FOR UPDATE`, verifica o administrador e grava clínica, vínculo, decisão e auditoria na mesma transação. Wrappers públicos usam SECURITY INVOKER; implementações SECURITY DEFINER têm search_path vazio, permissões revogadas de PUBLIC/anon e autorização explícita. Não há autopromoção pelo frontend.
-
-## Instalação
-
-1. Instale PHP 8.3+ com cURL, Composer, Python 3 e a CLI Supabase. Node é necessário apenas para testes JS.
-2. Crie um projeto Supabase de desenvolvimento. Não é necessário fornecer uma chave service_role ao MedFlow.
-3. Aplique `supabase/migrations/*_initial_schema.sql` no SQL Editor ou configure a CLI e aplique as migrations após revisar o destino. `database/migrations` documenta a localização canônica.
-4. Em Supabase Auth, habilite e-mail/senha e confirmação de e-mail. Desabilite login anônimo. Configure senha mínima de 12 caracteres, limites de Auth e SMTP para produção.
-5. Configure Site URL e URLs de redirecionamento: `http://localhost:5173/login.html` e `http://localhost:5173/recuperar.html`; adicione as URLs HTTPS de produção posteriormente. O frontend utiliza o fluxo implicit client-only de confirmação/recuperação e remove tokens do fragmento após validar o usuário.
-6. Copie `.env.example` para `backend/.env`. Defina `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` e `FRONTEND_ORIGIN` exata (sem barra final). A configuração recusa Supabase sem HTTPS.
-7. Copie `frontend/js/config.example.js` para `frontend/js/config.js` e preencha URL Supabase, chave pública e `apiUrl`. Este arquivo é público e só recebe valores públicos.
-8. Execute:
+Abra http://127.0.0.1:5173. O serviço de usuário `medflow-dev.service` inicia frontend e API automaticamente ao entrar na sessão do computador.
 
 ```sh
-cd backend
-composer install
-php -S localhost:8080 -t public public/index.php
+systemctl --user status medflow-dev.service
+systemctl --user restart medflow-dev.service
+journalctl --user -u medflow-dev.service -n 50
 ```
 
-Em outro terminal:
+Para instalar o serviço em outra máquina configurada: `bash scripts/install-local-service.sh`. Alternativamente, execute `bash scripts/dev.sh` e mantenha o terminal aberto. Logs ficam em `backend/var/`. Para desativar: `systemctl --user disable --now medflow-dev.service`.
 
-```sh
-python3 -m http.server 5173 --directory frontend
-```
+## Fluxo operacional
 
-Acesse http://localhost:5173. Cadastre o proprietário, confirme o e-mail e envie a solicitação.
+1. O proprietário cria uma conta, confirma o e-mail e solicita sua clínica.
+2. O superadministrador aprova ou rejeita a solicitação. Aprovação cria clínica e vínculo administrativo na mesma transação. Suspensão bloqueia operações clínicas.
+3. O administrador cadastra especialidades e consultórios, convida médicos e recepcionistas e configura filas com médico e consultório.
+4. Convites são compartilhados manualmente. O destinatário cria/confirma uma conta com o mesmo e-mail e aceita o link. Convites expiram em sete dias e podem ser revogados.
+5. A recepção cadastra pacientes e registra chegada, incluindo prioridade quando aplicável. Cada chegada gera uma senha e um link individual válido por 48 horas.
+6. O médico chama o próximo paciente, inicia e finaliza o atendimento ou registra ausência. Não pode manter dois chamados/atendimentos simultâneos.
+7. O paciente acompanha posição, estimativa e consultório pelo link, sem login. A página atualiza a cada dez segundos e oferece notificações enquanto estiver aberta. Rotacionar o link invalida o anterior.
 
-## Primeiro superadministrador
+Se um paciente tiver conta confirmada, seu e-mail pode ser vinculado no cadastro pela recepção, habilitando o painel pessoal. Pacientes cadastrados antes da criação da conta continuam usando o link individual. Estimativas são aproximações operacionais.
 
-Cadastre e confirme uma conta destinada à administração. No SQL Editor, como operador autorizado do projeto, execute usando o UUID real de `auth.users`:
+## Arquitetura e segurança
 
-```sql
-insert into public.platform_admins(user_id) values ('UUID_REAL_DA_CONTA_CONFIRMADA');
-```
+A API valida cada token com Supabase Auth e usa a chave pública e o token do próprio usuário para consultar PostgREST. Não utiliza service_role. Senhas ficam exclusivamente no Supabase Auth. A seleção de clinic_id nunca prova autorização: API e banco verificam vínculo, função e estado da clínica.
 
-Registre essa concessão no processo administrativo da organização. Nenhum seed cria superadministradores automaticamente. Faça login e acesse `/superadmin/index.html`. Aprovação cria o vínculo do proprietário; rejeição exige motivo. Repetições de decisão são recusadas.
+Tabelas públicas têm RLS; referências clínicas usam FKs compostas. RPCs verificam permissões e executam alterações e auditoria atomicamente. Wrappers públicos são SECURITY INVOKER; implementações privadas SECURITY DEFINER possuem search_path vazio e privilégios limitados. O superadministrador gerencia metadados da plataforma e não ganha acesso a pacientes.
+
+Convites e links usam tokens aleatórios de 32 bytes, armazenados somente como hash em tabelas privadas com acesso direto bloqueado. Acompanhamento público retorna apenas informações da própria senha, sem nomes ou dados de outros pacientes. A UI usa textContent, CSP e módulos locais. Sessões ficam em sessionStorage; uma evolução para BFF/cookies HttpOnly pode reforçar proteção contra código malicioso na origem.
+
+O rate limiter PHP usa arquivos/flock e atende uma instância. Para múltiplas instâncias, configure limite compartilhado no gateway/Redis. Chamadas diretas ao Supabase permanecem protegidas por RLS/RPC, mas não passam pelo limite PHP. Não há confiança automática em X-Forwarded-For.
+
+## Configurar outra instalação
+
+1. Instale PHP 8.3+ com cURL e JSON, Composer e Python 3; Podman pode substituir o PHP local. Node é necessário para testes de frontend.
+2. Crie um projeto Supabase e aplique **todas** as migrations de `supabase/migrations/` em ordem. Use a CLI vinculada ao projeto correto ou o SQL Editor. Não aplique `tests/postgres-auth-stub.sql` em Supabase.
+3. Habilite e-mail/senha e confirmação de e-mail, desabilite usuários anônimos e configure SMTP para produção. Configure senha mínima de 12 caracteres e limites de Auth.
+4. Configure Site URL `http://127.0.0.1:5173` e permita redirecionamentos para `/login.html` e `/recuperar.html` nessa origem. Adicione as URLs HTTPS reais quando publicar. localhost e 127.0.0.1 são origens diferentes.
+5. Copie `.env.example` para `backend/.env`: SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, FRONTEND_ORIGIN exata e RATE_LIMIT_DIR. Nunca publique esse arquivo.
+6. Copie `frontend/js/config.example.js` para `frontend/js/config.js`: URL Supabase, chave pública e apiUrl. Apenas valores públicos pertencem a esse arquivo; ele é ignorado pelo Git.
+7. Execute `composer install` em backend e `bash scripts/dev.sh` na raiz.
+
+A primeira conta de plataforma deve ser uma conta real confirmada, concedida pelo operador autorizado no SQL Editor. Insira seu UUID em platform_admins e registre a concessão em audit_logs na mesma transação. Nenhum cadastro público permite autopromoção. Nesta instalação, a conta escolhida pelo proprietário já recebeu essa concessão auditada.
 
 ## API
 
-Todas as rotas exceto health requerem Bearer token e e-mail confirmado:
+Respostas usam `{data: ...}` ou `{error: {code, message, request_id}}`. Rotas autenticadas exigem Bearer token válido e e-mail confirmado.
 
 | Método | Rota | Acesso |
 |---|---|---|
-| GET | /api/health | Público, verifica apenas processo PHP |
-| GET | /api/me | Usuário e vínculos visíveis |
-| GET | /api/requests | Solicitações próprias ou de plataforma |
-| POST | /api/requests | Usuário confirmado: name, contact_email, city |
+| GET | /api/health | Público; saúde do processo, não teste do banco |
+| POST | /api/public/track | Público; token individual |
+| GET | /api/me | Usuário e vínculos |
+| GET/POST | /api/requests | Solicitações próprias; plataforma pode consultar |
 | GET | /api/platform/dashboard | Superadministrador |
-| POST | /api/requests/{uuid}/decision | Superadministrador: decision approve/reject; reason obrigatório na rejeição |
+| POST | /api/requests/{uuid}/decision | Superadministrador |
+| POST | /api/clinics/{uuid}/status | Superadministrador |
+| POST | /api/invites/accept | Destinatário confirmado |
+| GET | /api/clinics/{uuid}/workspace | Vínculo ativo; dados conforme função |
+| POST | /api/clinics/{uuid}/actions | Permissões específicas por ação |
 
-Respostas `{data: ...}` ou `{error: {code, message, request_id}}`. Consultas listam até 100 registros e auditoria até 20. Contagens refletem os registros carregados; paginação completa será necessária para grande volume.
+Painel de plataforma carrega até 100 registros e auditoria recente; contagens representam os registros carregados. Cadastro operacional carrega até 500 pacientes recentes. Relatórios consideram 30 dias. Paginação e busca no servidor devem ser ampliadas para grande volume.
 
-## Hospedagem
+## Publicação
 
-Vercel: configure Root Directory `frontend`, sem framework e sem build. Gere `js/config.js` com valores públicos antes do deploy. Em `frontend/vercel.json`, substitua `http://localhost:8080` em connect-src pela origem HTTPS real da API. O PHP é hospedado separadamente, com document root `backend/public`, encaminhando as rotas para `index.php`. Nunca publique `backend/.env` ou o diretório backend como arquivos estáticos. Desabilite display_errors em produção e configure TLS e cabeçalhos no proxy.
+Frontend na Vercel: Root Directory `frontend`, sem framework. Gere `js/config.js` com valores públicos antes do deploy: ele não acompanha o Git. Atualize connect-src em `frontend/vercel.json` com a origem HTTPS da API. PHP deve ser hospedado separadamente, com document root `backend/public` e rotas encaminhadas a index.php. Configure TLS, CORS exato, display_errors desabilitado, variáveis de ambiente e diretório de rate limit gravável. Não publique backend como arquivos estáticos.
 
-O rate limiter usa arquivos com flock fora da raiz pública: funciona em uma instância PHP com disco compartilhado pelos workers. Para múltiplas instâncias substitua por Redis/limite no gateway. Não confia em X-Forwarded-For; configure IP real no proxy de confiança. Auth tem limites próprios no Supabase; chamadas diretas ao Data API continuam protegidas por RLS, constraints e autorização RPC, mas o rate limiter PHP não limita chamadas diretas. Para controles globais, limite também no gateway/Supabase.
+GitHub armazena o código; não conecta automaticamente a aplicação ao Supabase. Migrations e configurações de Auth continuam sendo etapas próprias. Esta instalação local está conectada ao projeto Supabase; hospedagem de produção ainda não foi realizada.
 
-Sessões ficam em sessionStorage, separadas por aba, sem armazenar senhas. CSP, uso de textContent e ausência de scripts remotos reduzem risco XSS; tokens em armazenamento JS permanecem acessíveis a código da origem. Uma evolução para sessões HttpOnly/BFF pode reforçar proteção. Logout revoga a sessão no Supabase; tokens de acesso já emitidos podem continuar válidos até expirar. Configure duração curta conforme o risco.
-
-## Testes
+## Verificação
 
 ```sh
-node tests/frontend.mjs
+npm ci
+npm test
 php tests/backend.php
 find backend tests -name '*.php' -exec php -l {} \;
-psql "$TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/rls.sql
+npx playwright install chromium
+npm run test:browser
 ```
 
-O teste SQL exige uma base Supabase descartável com a migration aplicada. Insere contas de teste identificadas por `example.test` e reverte tudo com ROLLBACK. Verifica isolamento entre clínicas, bloqueio de aprovação pelo proprietário, proibição de autopromoção, isolamento de solicitações, criação transacional de vínculo, restrições FK e bloqueio de RPC anônima. Não execute contra produção.
+Para integração SQL, use apenas uma base **descartável** com migrations aplicadas e execute tests/rls.sql e tests/operations.sql via psql com ON_ERROR_STOP. Os testes inserem fixtures identificadas por example.test e terminam em ROLLBACK. Em PostgreSQL simples e vazio, o stub de Auth pode ser usado somente nessa base descartável.
 
-## Privacidade e próximos passos
+`python3 tests/concurrency.py` exige um contêiner PostgreSQL local chamado medflow-operations-postgres, com usuário postgres. Cria uma base de teste própria, aplica migrations e remove apenas essa base ao terminar.
 
-Dados coletados nesta fase: nome do proprietário, e-mail, nome da clínica, contato e cidade. Nenhum CPF ou prontuário. Definir políticas de retenção, exclusão, backup, resposta a incidentes e termos de uso com a organização antes da operação comercial. Isso não representa certificação de conformidade LGPD.
+Validação executada nesta entrega:
 
-Próximas fases: gestão de membros com convites seguros, especialidades/consultórios, filas concorrentes, tickets, auditoria clínica, relatórios, MFA administrativo e monitoramento. Acesso público por token de paciente não está habilitado: exigirá token aleatório criptográfico, hash armazenado em schema privado, expiração, limitação de acesso e RPC retornando somente a senha do titular. Realtime será habilitado apenas com políticas apropriadas quando houver filas.
+- Cinco testes de autenticação JavaScript e 16 verificações PHP.
+- Oito testes Playwright dos fluxos de login, recepção, médico, administração, paciente, convite, acompanhamento e tela móvel, usando respostas simuladas explicitamente identificadas como testes.
+- Migrations e testes de autorização/RLS/fluxo operacional em PostgreSQL 17 descartável.
+- Concorrência: 16 chegadas simultâneas com numeração única, bloqueio de chegada duplicada e apenas uma chamada ativa entre oito tentativas simultâneas.
+- Migrations aplicadas no Supabase real e verificações de schema/RLS/conectividade. Não foram realizados login com senha do usuário ou testes reais de entrega SMTP.
 
-O banco remoto foi configurado em 09/10/2026 no projeto Supabase associado ao MedFlow. Foram aplicadas as migrations initial_schema e backfill_existing_profiles. As 12 tabelas têm RLS habilitado; as contas preexistentes receberam profiles. A hospedagem de produção e os testes completos de e-mail continuam pendentes.
+## Operação e privacidade
 
-## Validação desta entrega
+Sem CPF ou prontuários. Há nomes de pacientes, dados operacionais e auditoria: defina retenção, exclusão, backups, restauração, monitoramento, resposta a incidentes e termos antes do uso comercial. Não representa certificação LGPD. Relatórios CSV devem ser tratados como dados da clínica.
 
-- JavaScript: 3 testes de sessão passaram; sintaxe dos módulos validada.
-- PHP 8.3.35: todos os 9 arquivos PHP passaram no lint; 7 verificações de validação/autenticação/rate limiting passaram.
-- PostgreSQL 17 descartável: migration aplicada e teste SQL de autorização/isolamento executado com um stub mínimo de auth.users/auth.uid. Isso valida PostgreSQL/RLS, mas não substitui teste com o Supabase Auth real. `tests/postgres-auth-stub.sql` nunca deve ser aplicado em Supabase.
-- Confirmação por e-mail, recuperação real, envio SMTP, implantação Vercel e integração ponta a ponta ainda não foram executados.
-
-Referências consultadas: [Supabase Auth](https://supabase.com/docs/guides/auth/passwords), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [changelog](https://supabase.com/changelog).
-
-## Iniciar frontend e API juntos
-
-Com os arquivos de configuração preenchidos, execute na raiz do projeto:
-
-```sh
-bash scripts/dev.sh
-```
-
-O script utiliza PHP instalado ou o contêiner PHP via Podman, serve apenas a pasta frontend e verifica as duas portas. Servidores que já respondem são reutilizados. Mantenha o terminal aberto. Use http://127.0.0.1:5173 para corresponder ao CORS configurado. Logs locais ficam em backend/var, ignorados pelo Git.
-
-Após a implantação remota: consultas RLS de perfil, membros, solicitações e clínicas foram verificadas com o papel authenticated em transação revertida, sem criar contas de teste ou alterar registros. Nenhuma função administrativa foi concedida automaticamente às contas existentes.
+O acompanhamento usa polling; Realtime não é necessário para esta versão. Publicação, SMTP de produção, MFA administrativo e validação ponta a ponta com a equipe real continuam sendo configuração operacional. A proteção contra senhas vazadas está desativada no projeto; verifique disponibilidade e habilitação em [Supabase Password Security](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
