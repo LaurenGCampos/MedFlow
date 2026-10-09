@@ -1,0 +1,1 @@
+import('./app.js').catch(() => { const message = document.querySelector('#message'); if (message) { message.textContent = 'Não foi possível carregar o sistema. Confira a configuração pública e a conexão.'; message.className = 'notice error'; } });

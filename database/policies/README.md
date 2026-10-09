@@ -1,0 +1,1 @@
+Políticas versionadas na migration inicial. Tabelas futuras têm leitura limitada e nenhuma escrita concedida a clientes. Acesso clínico exige vínculo ativo; ser platform_admin não concede acesso clínico.

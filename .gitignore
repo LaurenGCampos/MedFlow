@@ -1,0 +1,6 @@
+.env
+backend/.env
+backend/vendor/
+node_modules/
+frontend/js/config.js
+backend/var/
