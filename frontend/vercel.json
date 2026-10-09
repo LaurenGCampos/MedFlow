@@ -13,7 +13,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://*.supabase.co http://localhost:8080; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://*.supabase.co http://localhost:8080 http://127.0.0.1:8080; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
         }
       ]
     }

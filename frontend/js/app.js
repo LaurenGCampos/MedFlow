@@ -1,5 +1,6 @@
 import {login,signup,logout,recover,changePassword,callback,session} from './auth.js';
 import {api} from './api.js';
+import {homeFor} from './navigation.js';
 const page=document.body.dataset.page;
 document.querySelector('#cancel-decision')?.addEventListener('click',()=>document.querySelector('#decision-dialog').close());
 const message=document.querySelector('#message');
@@ -26,7 +27,7 @@ async function dashboard(){
  document.querySelector('#clinic-count').textContent=data.clinics.length;
  const list=document.querySelector('#pending');list.replaceChildren(...data.requests.map(pendingEntry));
  if(!data.requests.length)list.append(row(['Nenhuma solicitação pendente.','','','','']));
- document.querySelector('#clinics').replaceChildren(...data.clinics.map(c=>row([c.name,labels[c.status],new Date(c.created_at).toLocaleDateString('pt-BR')])));
+ document.querySelector('#clinics').replaceChildren(...data.clinics.map(c=>{const tr=row([c.name,labels[c.status],new Date(c.created_at).toLocaleDateString('pt-BR')]);const td=el('td');const b=el('button',c.status==='active'?'Suspender':'Ativar','secondary');b.onclick=()=>{const dialog=document.querySelector('#decision-dialog');const form=dialog.querySelector('form');dialog.querySelector('h2').textContent=`${c.status==='active'?'Suspender':'Ativar'} ${c.name}`;const reason=form.elements.reason;reason.value='';reason.required=true;reason.closest('label').hidden=false;form.onsubmit=async event=>{event.preventDefault();const submit=form.querySelector('[type=submit]');submit.disabled=true;try{await api(`/clinics/${c.id}/status`,{status:c.status==='active'?'suspended':'active',reason:reason.value});dialog.close();await dashboard();tell('Situação da clínica atualizada.');}catch(e){dialog.querySelector('[role=alert]').textContent=e.message;}finally{submit.disabled=false;}};dialog.querySelector('[role=alert]').textContent='';dialog.showModal();};td.append(b);tr.append(td);return tr;}));
  document.querySelector('#audit').replaceChildren(...data.audit.map(a=>row([a.action,a.target_id,new Date(a.created_at).toLocaleString('pt-BR')])));
 }
 async function owner(){
@@ -35,7 +36,8 @@ async function owner(){
 }
 async function start(){
  if(page==='landing')return;
- await callback();
+ const fromCallback=await callback();
+ if(fromCallback&&page==='login'){const me=await api('/me');location.assign(homeFor(me));return;}
  document.querySelector('#logout')?.addEventListener('click',()=>logout().catch(error=>tell(error.message,true)));
  if(['owner','platform','clinic'].includes(page)){
   if(!session()){location.replace('/login.html');return;}
@@ -53,7 +55,7 @@ async function start(){
  document.querySelector('#main-form')?.addEventListener('submit',async event=>{
   event.preventDefault();const form=event.currentTarget;const body=Object.fromEntries(new FormData(form));const button=form.querySelector('[type=submit]');button.disabled=true;tell('Processando…');
   try{
-   if(page==='login'){await login(body.email,body.password);const me=await api('/me');location.assign(me.platform_admin?'/superadmin/index.html':'/solicitacao.html');}
+   if(page==='login'){await login(body.email,body.password);const me=await api('/me');location.assign(homeFor(me));}
    if(page==='signup'){await signup(body.email,body.password,body.name);form.reset();tell('Cadastro recebido. Confira seu e-mail para confirmar a conta e depois faça login.');}
    if(page==='recover'){if(session()&&new URLSearchParams(location.search).get('mode')==='password'){await changePassword(body.password);tell('Senha atualizada.');}else{await recover(body.email);tell('Se o e-mail estiver cadastrado, você receberá um link para recuperar a senha.');}}
    if(page==='owner'){await api('/requests',body);form.reset();await owner();tell('Solicitação enviada para análise.');}

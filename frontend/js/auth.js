@@ -5,7 +5,16 @@ function save(data) { if (data?.access_token) sessionStorage.setItem(key, JSON.s
 export async function authRequest(path, body, token, method = 'POST') {
   const response = await fetch(`${config.supabaseUrl}/auth/v1/${path}`, { method, headers: { apikey: config.publishableKey, 'Content-Type':'application/json', ...(token ? {Authorization:`Bearer ${token}`} : {}) }, ...(body ? {body:JSON.stringify(body)} : {}) });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(response.status === 429 ? 'Muitas tentativas. Aguarde e tente novamente.' : 'Não foi possível autenticar. Confira os dados ou solicite um novo link.');
+  if (!response.ok) {
+    const messages = {
+      email_not_confirmed: 'Confirme seu e-mail pelo link enviado pelo Supabase antes de entrar. Confira também a pasta de spam.',
+      invalid_credentials: 'E-mail ou senha incorretos.',
+      signup_disabled: 'O cadastro está desabilitado no Supabase.',
+      otp_expired: 'O link expirou ou já foi utilizado. Solicite um novo link.',
+      over_email_send_rate_limit: 'O limite de envio de e-mails foi atingido. Aguarde antes de solicitar outro link.'
+    };
+    throw new Error(messages[data.code || data.error_code] || (response.status === 429 ? 'Muitas tentativas. Aguarde e tente novamente.' : 'Não foi possível autenticar. Confira os dados ou solicite um novo link.'));
+  }
   return data;
 }
 let refreshing;

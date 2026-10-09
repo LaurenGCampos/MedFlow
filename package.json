@@ -1,0 +1,12 @@
+{
+  "name": "medflow",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/frontend.mjs",
+    "test:browser": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0"
+  }
+}

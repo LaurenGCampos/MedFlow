@@ -85,7 +85,7 @@ Dados coletados nesta fase: nome do proprietário, e-mail, nome da clínica, con
 
 Próximas fases: gestão de membros com convites seguros, especialidades/consultórios, filas concorrentes, tickets, auditoria clínica, relatórios, MFA administrativo e monitoramento. Acesso público por token de paciente não está habilitado: exigirá token aleatório criptográfico, hash armazenado em schema privado, expiração, limitação de acesso e RPC retornando somente a senha do titular. Realtime será habilitado apenas com políticas apropriadas quando houver filas.
 
-O banco remoto não foi implantado e nenhum serviço externo foi alterado nesta entrega. Configurações reais, implantação e testes ponta a ponta de e-mail dependem do projeto Supabase e da hospedagem.
+O banco remoto foi configurado em 09/10/2026 no projeto Supabase associado ao MedFlow. Foram aplicadas as migrations initial_schema e backfill_existing_profiles. As 12 tabelas têm RLS habilitado; as contas preexistentes receberam profiles. A hospedagem de produção e os testes completos de e-mail continuam pendentes.
 
 ## Validação desta entrega
 
@@ -95,3 +95,15 @@ O banco remoto não foi implantado e nenhum serviço externo foi alterado nesta 
 - Confirmação por e-mail, recuperação real, envio SMTP, implantação Vercel e integração ponta a ponta ainda não foram executados.
 
 Referências consultadas: [Supabase Auth](https://supabase.com/docs/guides/auth/passwords), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [changelog](https://supabase.com/changelog).
+
+## Iniciar frontend e API juntos
+
+Com os arquivos de configuração preenchidos, execute na raiz do projeto:
+
+```sh
+bash scripts/dev.sh
+```
+
+O script utiliza PHP instalado ou o contêiner PHP via Podman, serve apenas a pasta frontend e verifica as duas portas. Servidores que já respondem são reutilizados. Mantenha o terminal aberto. Use http://127.0.0.1:5173 para corresponder ao CORS configurado. Logs locais ficam em backend/var, ignorados pelo Git.
+
+Após a implantação remota: consultas RLS de perfil, membros, solicitações e clínicas foram verificadas com o papel authenticated em transação revertida, sem criar contas de teste ou alterar registros. Nenhuma função administrativa foi concedida automaticamente às contas existentes.

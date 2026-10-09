@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
 namespace MedFlow\Controllers;
-use MedFlow\Repositories\Supabase;
+use MedFlow\Repositories\Gateway;
 use MedFlow\Services\Validation;
 final class ClinicController {
-    public function __construct(private readonly Supabase $db) {}
+    public function __construct(private readonly Gateway $db) {}
     public function submit(array $body): mixed {
         $name = Validation::text($body, 'name', 3, 120);
         $email = Validation::text($body, 'contact_email', 3, 254);

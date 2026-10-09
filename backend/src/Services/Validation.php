@@ -6,7 +6,8 @@ final class Validation {
         $value = $body[$key] ?? null;
         if (!is_string($value) || !preg_match('//u', $value)) throw new ApiError(422, 'validation', 'Campo inválido: ' . $key);
         $value = trim($value);
-        if (strlen($value) < $min || strlen($value) > $max || preg_match('/[\x00-\x1F\x7F]/', $value)) throw new ApiError(422, 'validation', 'Campo inválido: ' . $key);
+        $length = preg_match_all('/./us', $value);
+        if ($length < $min || $length > $max || preg_match('/[\x00-\x1F\x7F]/', $value)) throw new ApiError(422, 'validation', 'Campo inválido: ' . $key);
         return $value;
     }
 }

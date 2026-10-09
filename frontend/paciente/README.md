@@ -1,1 +1,1 @@
-Painel reservado para fase futura. Nenhuma operação clínica habilitada nesta entrega.
+Painel funcional em index.html. A função e a clínica são verificadas pela API e pelo PostgreSQL.

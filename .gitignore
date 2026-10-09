@@ -4,3 +4,5 @@ backend/vendor/
 node_modules/
 frontend/js/config.js
 backend/var/
+test-results/
+playwright-report/
